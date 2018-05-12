@@ -1,0 +1,165 @@
+---
+title: "Introduction to Time Series and Plotting techniques in R"
+output:
+  html_document:
+    fontsize: 12
+    theme: united
+    toc: yes
+    toc_depth: 2
+    toc_float: no
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Motivation
+
+##Time Series Introduction
+
+A time series is a series of data points with time as its index.  In a **strictly regular** time series, the chronological data points will be evenly spaced. A **regular** time series may not have evenly spaced points but posess some type of underlying regularity.  An **irregular** time series will be unequally spaced or contain too many missing values to possess regularity.  The **seasonality** or **period** of a time period indicates the length of some cyclical pattern, while the **frequency** of a time series indicates the number of observations during that season.  Stocks, climate, and production data are examples that lend itself well to time series analysis, because they are often sampled at equal intervals.  The example below is a plot of monthly recreational visitors to Glacier National Park from 1979-2017.  The **seasonality** is 1 year (you can see the cycle of visitation repeats) and the **frequency** is 12 months (the number of intervals in 1 year).
+
+```{r echo=FALSE}
+glacier <- read.csv("Glacier_Monthly_Data.csv")
+glaciert <- as.vector(t(as.matrix(glacier[,2:13])))/1000
+glacier.ts <- ts(glaciert, start = c(1979,1), end = c(2017,12), frequency = 12)
+plot(glacier.ts, xlab = "Time (years)", ylab = "Visitors (1000's)", col = "purple")
+title("Glacier NP Monthly Visitors, 1979-2017")
+```
+
+In the graph above, we can also gather that the minimum visitation occurs during the winter months and appears to be **stationary**.  It also appears that 2017 could be an outlier. The plot may also inspire one to view the time series with a different frequency, such as quarterly.  This is an example of a **regular** time series.
+
+Besides the usual statistical anomalies, a time series plot can tell you something about the relationship of the mean level trend line to the seasonal pattern.  For the Redwood plot below, the relationship looks to be **multiplicative**. That is, the height of the seasonal pattern is monotonically increasing (it could also be decreasing to be multiplicative).  In the Glacier graph, the relationship appears to be **additive**, that is the height of the seasonal pattern is constant.  The Glacier graph also shows a **stationary** trend, while the Redwood graph is a bit amiguous, it could be stationary or slightly increasing. 
+
+
+
+```{r echo = FALSE}
+par(mfrow = c(1,2))
+redwood <- read.csv("Redwood_Monthly_Data.csv", header = TRUE)
+redwoodt <- as.vector(t(as.matrix(redwood[,2:13])))/1000
+redwood.ts <- ts(redwoodt, start = c(1979,1), end = c(2017,12), frequency = 12)
+red.win <- ts(redwoodt, start = c(1975,1), end = c(1985,1), frequency = 12)
+plot(red.win, xlab = "Time (years)", ylab = "Visitors (1000's)", col = "coral3", lwd = 1.5)
+title("Rec Visitors for Redwood NP", font = 8)
+plot(window(glacier.ts, start = c(2002,1), end = c(2010,1)), xlab = "Time (years)", ylab = "Visitors (1000's)", col = "purple", lwd = 1.5)
+title("Rec Visitors for Glacier")
+```
+ 
+ **Trend** and **seasonality** are important features that may be able to be determined with a time series plot. The `stl` and `decompose` functions split up these features using moving averages.  Below is an example of the `decompose` function for the Redwood National Park, and it does appear to possess an increasing trend.  The last plot is that of error (more on that later if I have time!).
+ 
+```{r decompose}
+red.window <- ts(redwoodt, start = c(1975,1), end = c(1985,1), frequency = 12)
+plot(decompose(red.window, type = "multiplicative"))
+```
+
+Besides the `ts` object in base R, there are a plethora of packages that work with time series and it can be difficult to determine which package might be best for a given situation. The `ts` options in base R will only accept a vector of two characters for its time index and thus cannot handle many different date formats. Other options including those of the `zoo` and `xts` class, which easily handle dates of different classes and are easier to subset.  It is also possible to coerce a `zoo` or `xts` object back to the `ts` domain if necessary.  
+
+##Base R: ts
+In order to form a `ts` object, it is a requirement to know the $start, end$, and $frequency$ of the time series.  This can be counterintuitive at first, since the time vector from your original data won't be used.  The form of the data should be in vector or matrix form, but R will also coerce other forms.  `ts` can only hand a strictly regular time series!  Let's take a look at how to form a `ts` object using the monthly recreational visitation data for Everglades National Park.
+
+```{r Everglades}
+everglades <- read.csv("Everglades_Monthly_Data.csv", header = TRUE)
+head(everglades)
+class(everglades)
+```
+
+Observe the dimension of our data frame, but for a univariate time series `ts` requires a vector.
+```{r}
+dim(everglades)
+```
+
+To form a time series, we will have to unwrap our data into a vector form (there's probably a quicker way to do this, but it helps to illustrate the form that `ts` prefers).  I also choose to transform the population data into the 1000's.  The structure of the time series will show the dates and beginnning of the data set.  
+```{r}
+everglades.vec <- as.vector(t(as.matrix(everglades[,2:13])))/1000 #unwrap
+```
+
+Now, we are ready to form our time series.
+```{r collapse=TRUE}
+everglades.ts <- ts(everglades.vec, c(1979,1), end = c(2017,12), frequency = 12) 
+```
+
+Below is some information about our time series structure, notice that `dim = NULL`, which means that we can't index through our time series as we would a data frame.
+```{r}
+str(everglades.ts)
+dim(everglades.ts)
+```
+
+##ts plots
+It's important to note that `ts` can only handle regular time series data, so it's important to preprocess your data to check for this.  Plotting the time series is relatively easy with the base `plot` function.
+```{r ts_everglades}
+plot(everglades.ts, xlab = "Time (years)", ylab = "Visitors (1000's)",col = "coral3", lwd = 1.5)
+title("Monthly Recreational Visitors-Everglades NP")
+```
+
+To view a subset of the data set, the `window` function  can be used.  Here, I used it to view a portion of the plot but it can also be used to form a new object. 
+```{r ts_window}
+plot(window(everglades.ts, start = c(1996,1), end = c(2005, 1), frequency = 12), ylab = "Visitors (1000's)", xlab = "Time (years)",col = "coral3", lwd = 2)
+title("Monthly Recreational Visitors-Everglades NP (1996-2005)")
+```
+
+There are a few ways to plot multiple time series plots on one graph.  Here, `plot` will be shown, but `plot.ts` could have also been used.  The `plot.type` can be set to `multiple` or `single`, `multiple` will vertically stack the individual time series while `single` will plot the time series on the same plot.   It is important to note that in this example the input is a time series with 3 data series.  The `aggregrate.ts` function is also introduced in order to show the time series by total annual visitors.  `ts.plot` can plot time series with different time bases but should the time series should have the same frequency.  
+
+```{r ts.plot}
+parks.ts <- cbind(everglades.ts, glacier.ts, redwood.ts)
+head(parks.ts)
+plot(aggregate.ts(parks.ts, FUN=sum), xlab = "Time (years)", ylab = "Total Yearly Visitors (1000's)", plot.type = "single", col = c(1:3), lwd = 2)
+title("Total Annual Recreational Visitors")
+legend("topleft", c("Everglades", "Glacier", "Redwood"), lty = c(1,1,1), col = c(1:3), lwd = 2)
+```
+
+
+
+
+##Zoo Objects
+Unlike `ts`, the `zoo` package can detect whether a time series is strictly regular, regular, or irregular.  It has a variety of tools that can help transform a time series into a format that is regular. It can handle a variety of date forms and you will want to make sure to transform your date into one of the date formats. Although `zoo` objects seem to handle missing values and irregular time series well, it is important to preprocess the data and uncover any anomolies that could be fixed. Instead of a `start` and `end` parameter, the zoo parameter is `order.by`. For the `zoo` time series object I will be using weather data for a couple months from Minneapolis, Minnesota during 2017. 
+```{r collapse = TRUE}
+library(zoo)
+mpls <- read.csv("minneapolis_2months2017.csv", header = TRUE)
+head(mpls)
+mpls.date <- as.POSIXct(as.character(mpls$date, format="%Y-%m-%d %H:%M:%S")) #form date object
+mplstemp.zoo <- zoo(mpls$temp, order.by = mpls.date) #form zoo object of time/temp data
+str(mplstemp.zoo)
+is.regular(mplstemp.zoo, strict = TRUE);is.regular(mplstemp.zoo, strict = FALSE)
+```
+For this series, it seemed reasonable to use `na.approx` to fill in missing values.
+```{r collapse = TRUE}
+sum(is.na(mplstemp.zoo))
+mplstemp.zoo[is.na(mplstemp.zoo)==TRUE]
+mpls.zoo2 <- na.approx(mplstemp.zoo)
+class(mpls.zoo2)
+```
+
+Plotting a zoo object works with both `plot.zoo` and `plot`.  Just as in   
+```{r zoo_plot}
+plot.zoo(mpls.zoo2, xlab = "Month", ylab = "Temp (F)", col = "mediumblue", lwd = 2) 
+title("MPLS Jan-March Temperature for 2017")
+```
+
+##xts Objects
+The preceeding plot was not changed to a `strictly regular` format but`zoo` has the capability to do this.  However, the original functions come from the `xts` package.  The 'x' stands for xtensible, named as such because it is an extension of `zoo`. An `xts` object is formed just as a `zoo` object is.  However, an `xts` object possesses diminsionality and thus is easier to index and subset through.  
+
+First, let's coerce our `zoo` object into an `xts` object.
+```{r coercion}
+library(xts)
+mpls.temp.xts <- as.xts(mpls.zoo2)
+head(mpls.temp.xts)
+```
+
+As you can see, `xts` shows with date as an index. `xts` objects have dimension, whereas a `ts` object or a `zoo` object has `dim = NULL`, which is why can be easier to sort throught your data.
+```{r dim}
+dim(mpls.temp.xts)
+```
+
+Subsetting is convenient in `xts` as you can do it with its dates and with a `/` for a range of dates.  
+```{r xts_indexing}
+mpls.temp.xts["2017-01-01 00:15:00"] #temperature for new years
+mpls.temp.xts["2017-01-01 00:15:00/2017-01-01 03:15:00"] #first few hours of new years
+```
+
+`xts` also has several tools for converting to different periods.  We will make the Minneapolis temperature data strictly regular by aggregrating to an hourly temperature.  In `xts`, this is `to.hourly`, which provides, the first, min, max, and last of the data.  
+```{r xts_regular}
+to.hourly(mpls.temp.xts) #what does this mean?
+```
